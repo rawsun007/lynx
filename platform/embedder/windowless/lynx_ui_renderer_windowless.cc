@@ -87,8 +87,12 @@ LynxUIRendererWindowless::LynxUIRendererWindowless(lynx_view_builder_t* builder)
   headless_engine_ = std::make_unique<clay::ClayHeadlessEngine>(
       icu_data_path, windowless_renderer_->GetRendererConfig(), &description_,
       windowless_renderer_.get(),
-      clay::MakeVsyncRequestCallback(builder->custom_vsync_monitor));
+      clay::MakeVsyncRequestCallback(builder->custom_vsync_monitor),
+      windowless_renderer_->enable_sync_compositor);
   headless_engine_->SetHeadlessDelegate(this);
+  if (windowless_renderer_->enable_sync_compositor) {
+    windowless_renderer_->headless_engine = headless_engine_.get();
+  }
 
   auto* view_context =
       static_cast<clay::ViewContext*>(headless_engine_->GetViewContext());
@@ -145,6 +149,8 @@ LynxUIRendererWindowless::LynxUIRendererWindowless(lynx_view_builder_t* builder)
 
 LynxUIRendererWindowless::~LynxUIRendererWindowless() {
   InvalidateInputEvents();
+  windowless_renderer_->headless_engine = nullptr;
+  windowless_renderer_->frame_future = {};
   headless_engine_->SetHeadlessDelegate(nullptr);
   windowless_renderer_->run_task = nullptr;
   windowless_renderer_->send_pointer_event = nullptr;
@@ -256,6 +262,18 @@ void LynxUIRendererWindowless::SendPointerEvent(const ClayPointerEvent& event) {
 
 void LynxUIRendererWindowless::SendKeyEvent(const ClayKeyEvent& event) {
   headless_engine_->SendKeyEvent(&event, nullptr, nullptr);
+}
+
+void LynxUIRendererWindowless::OnInvalidate() {
+  if (windowless_renderer_->on_invalidate_callback) {
+    windowless_renderer_->on_invalidate_callback(
+        reinterpret_cast<lynx_windowless_renderer_t*>(
+            windowless_renderer_.get()));
+  }
+}
+
+void LynxUIRendererWindowless::SubmitFrameFuture(std::future<bool> future) {
+  windowless_renderer_->frame_future = future.share();
 }
 
 const char* LynxUIRendererWindowless::GetClipboardData() const {

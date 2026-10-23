@@ -7,6 +7,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "build/build_config.h"
 #include "clay/lynx_adaptor/native_platform_view.h"
 #include "platform/embedder/public/capi/lynx_native_view_capi.h"
 
@@ -277,6 +278,15 @@ LYNX_EXTERN_C lynx_surface_handle_t* lynx_native_view_acquire_surface(
   auto handle = self->AcquireSurface(width, height);
   return reinterpret_cast<lynx_surface_handle_t*>(handle);
 }
+
+LYNX_EXTERN_C lynx_surface_handle_t*
+lynx_native_view_acquire_surface_for_sync_draw(lynx_native_view_t* view,
+                                               int width, int height) {
+  auto self = reinterpret_cast<LynxNativeViewPrivate*>(view);
+  return reinterpret_cast<lynx_surface_handle_t*>(
+      self->AcquireSurfaceForSyncDraw(width, height));
+}
+
 LYNX_EXTERN_C lynx_surface_handle_t*
 lynx_native_view_acquire_surface_with_transform(lynx_native_view_t* view,
                                                 int width, int height,

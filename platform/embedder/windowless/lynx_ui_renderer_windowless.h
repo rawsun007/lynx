@@ -54,6 +54,8 @@ class LynxUIRendererWindowless : public LynxUIRenderer,
   void RegisterIMEHandler(void* handler, void* opaque) override {}
 
   /* headless delegate */
+  void OnInvalidate() override;
+  void SubmitFrameFuture(std::future<bool> future) override;
   const char* GetClipboardData() const override;
   void SetClipboardData(const char* data) override;
   void ActivateSystemCursor(int type, const char* path) override;

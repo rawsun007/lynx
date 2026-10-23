@@ -102,6 +102,10 @@ void RasterFrameService::SetVsyncSourceActive(bool active) {
 
 bool RasterFrameService::DemandDrawHw() { return scheduler_->OnDraw(); }
 
+void RasterFrameService::MarkRasterFrameNeeded() {
+  scheduler_->SetNeedsRasterBeginFrame();
+}
+
 void RasterFrameService::RequestRasterFrame() {
   scheduler_->SetNeedsRasterBeginFrame();
   RequestFrameSignal();
@@ -345,7 +349,18 @@ void RasterFrameService::ScheduledActionRasterInvalidate() {}
 
 void RasterFrameService::ScheduledActionDraw() {
   FML_DCHECK(raster_frame_deadline_timer_);
+  // TODO: Extend windowless self-invalidation suppression to other platforms
+  // here and in force-draw requests. Select by host mode to preserve Android
+  // GL Functor notifications.
+#if defined(OS_LINUX)
+  // Linux windowless synchronous draws must not invalidate themselves.
+  // New work still calls RequestRasterFrame().
+  if (!using_sync_compositor_) {
+    RequestFrameSignal();
+  }
+#else
   RequestFrameSignal();
+#endif
   if (!raster_frame_deadline_timer_->Stopped()) {
     raster_frame_deadline_timer_->Stop();
   }

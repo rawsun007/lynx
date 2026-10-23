@@ -5,9 +5,16 @@
 #ifndef CLAY_SHELL_PLATFORM_HEADLESS_PUBLIC_EMBDDER_HEADLESS_DELEGATE_H_
 #define CLAY_SHELL_PLATFORM_HEADLESS_PUBLIC_EMBDDER_HEADLESS_DELEGATE_H_
 
+#include <future>
+
+#include "build/build_config.h"
+
 namespace lynx {
 class HeadlessDelegate {
  public:
+  // Windowless sync callbacks delivered on the platform thread.
+  virtual void OnInvalidate() {}
+  virtual void SubmitFrameFuture(std::future<bool> future) {}
   virtual const char* GetClipboardData() const = 0;
   virtual void SetClipboardData(const char* data) = 0;
   virtual void ActivateSystemCursor(int type, const char* path) = 0;

@@ -34,6 +34,9 @@ class RasterFrameService
   // Ask the Rasterizer to submit a new Frame synchronously.
   bool DemandDrawHw();
 
+  // Mark raster work without requesting a host invalidation or VSync.
+  // Use when the host is already driving the draw.
+  void MarkRasterFrameNeeded();
   void RequestRasterFrame();
   void RequestUIFrame(bool inside_ui_frame = false);
 
