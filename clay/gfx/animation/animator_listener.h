@@ -35,6 +35,23 @@ class AnimatorListener {
   }
 
   virtual ~AnimatorListener() = default;
+
+  virtual void OnAnimationStartWithElapsedTime(Animator& animation,
+                                               double elapsed_time) {
+    OnAnimationStart(animation);
+  }
+  virtual void OnAnimationRepeatWithElapsedTime(Animator& animation,
+                                                double elapsed_time) {
+    OnAnimationRepeat(animation);
+  }
+  virtual void OnAnimationEndWithElapsedTime(Animator& animation,
+                                             double elapsed_time) {
+    OnAnimationEnd(animation);
+  }
+  virtual void OnAnimationCancelWithElapsedTime(Animator& animation,
+                                                double elapsed_time) {
+    OnAnimationCancel(animation);
+  }
 };
 
 /**

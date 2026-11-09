@@ -452,12 +452,19 @@ void LynxEventDispatcher::OnGestureHandlerEvent(const std::string& event_name,
 void LynxEventDispatcher::OnAnimationEvent(const std::string& event_name,
                                            const char* animation_name,
                                            int view_id) {
+  OnAnimationEventWithElapsedTime(event_name, animation_name, view_id, 0.0);
+}
+
+void LynxEventDispatcher::OnAnimationEventWithElapsedTime(
+    const std::string& event_name, const char* animation_name, int view_id,
+    double elapsed_time) {
   if (!engine_proxy_) {
     return;
   }
   clay::Value::Map rk_dict;
   rk_dict["animation_type"] = clay::Value("keyframe-animation");
   rk_dict["animation_name"] = clay::Value(animation_name);
+  rk_dict["elapsedTime"] = clay::Value(elapsed_time);
 #if OS_IOS
   if (event_name == "animationend") {
     rk_dict["finished"] = clay::Value(1);
@@ -472,12 +479,20 @@ void LynxEventDispatcher::OnTransitionEvent(const std::string& event_name,
                                             const char* animation_name,
                                             int view_id,
                                             ClayAnimationPropertyType type) {
+  OnTransitionEventWithElapsedTime(event_name, animation_name, view_id, type,
+                                   0.0);
+}
+
+void LynxEventDispatcher::OnTransitionEventWithElapsedTime(
+    const std::string& event_name, const char* animation_name, int view_id,
+    ClayAnimationPropertyType type, double elapsed_time) {
   if (!engine_proxy_) {
     return;
   }
   auto apt = AnimationPropertyTypeToString(type);
   clay::Value::Map rk_dict;
   rk_dict["animation_type"] = clay::Value(apt.c_str());
+  rk_dict["elapsedTime"] = clay::Value(elapsed_time);
   if (animation_name != nullptr && animation_name[0] != '\0') {
     rk_dict["animation_name"] = clay::Value(animation_name);
   }

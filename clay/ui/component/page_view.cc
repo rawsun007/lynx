@@ -1975,18 +1975,20 @@ void PageView::SetRefreshRate(uint32_t refresh_rate) {
 void PageView::ReportAnimationEvent(const AnimationParams& animation_params,
                                     int view_id) {
   if (event_delegate_) {
-    event_delegate_->OnAnimationEvent(
+    event_delegate_->OnAnimationEventWithElapsedTime(
         EventTypeToString(animation_params.event_type),
-        animation_params.animation_name, view_id);
+        animation_params.animation_name, view_id,
+        animation_params.elapsed_time);
   }
 }
 void PageView::ReportTransitionEvent(const AnimationParams& animation_params,
                                      int view_id,
                                      ClayAnimationPropertyType property_type) {
   if (event_delegate_) {
-    event_delegate_->OnTransitionEvent(
+    event_delegate_->OnTransitionEventWithElapsedTime(
         EventTypeToString(animation_params.event_type),
-        animation_params.animation_name, view_id, property_type);
+        animation_params.animation_name, view_id, property_type,
+        animation_params.elapsed_time);
   }
 }
 void PageView::DispatchAnimationEvent(const AnimationParams& animation_params,

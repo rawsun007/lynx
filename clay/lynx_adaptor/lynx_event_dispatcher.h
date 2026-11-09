@@ -77,6 +77,13 @@ class LynxEventDispatcher : public EventDelegate {
   void OnTransitionEvent(const std::string& event_name,
                          const char* animation_name, int view_id,
                          ClayAnimationPropertyType type) override;
+  void OnAnimationEventWithElapsedTime(const std::string& event_name,
+                                       const char* animation_name, int view_id,
+                                       double elapsed_time) override;
+  void OnTransitionEventWithElapsedTime(const std::string& event_name,
+                                        const char* animation_name, int view_id,
+                                        ClayAnimationPropertyType type,
+                                        double elapsed_time) override;
   void OnActiveChanged(int view_id, bool active) override;
   void OnFocusChanged(int view_id, bool focus) override;
   void OnHoverChanged(int view_id, bool hover) override;

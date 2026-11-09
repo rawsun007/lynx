@@ -88,6 +88,20 @@ class EventDelegate {
                               float, float, float, float, float, float, int64_t,
                               int) {}
 #endif
+  // Elapsed time is measured in seconds on the active animation timeline.
+  virtual void OnAnimationEventWithElapsedTime(const std::string& event_name,
+                                               const char* animation_name,
+                                               int view_id,
+                                               double elapsed_time) {
+    OnAnimationEvent(event_name, animation_name, view_id);
+  }
+  virtual void OnTransitionEventWithElapsedTime(const std::string& event_name,
+                                                const char* animation_name,
+                                                int view_id,
+                                                ClayAnimationPropertyType type,
+                                                double elapsed_time) {
+    OnTransitionEvent(event_name, animation_name, view_id, type);
+  }
 };
 
 }  // namespace clay

@@ -229,6 +229,26 @@ TEST_F_UI(KeyFrameTest, TransitionStartsAfterNodeReady) {
       ClayAnimationPropertyType::kHeight));
 }
 
+TEST_F_UI(KeyFrameTest, TransitionWithNegativeDelayStartsPartwayThrough) {
+  animator_view_->SetBound(0, 0, 100, 200);
+  TransitionData transition;
+  transition.property = ClayAnimationPropertyType::kHeight;
+  transition.duration = 160;
+  transition.delay = -80;
+  transition.timing_func.timing_func = ClayTimingFunctionType::kLinear;
+  animator_view_->SetTransition({transition});
+  animator_view_->OnNodeReady();
+  animator_view_->SetHeight(100);
+
+  auto* handler = page_->GetAnimationHandler();
+  handler->DoAnimationFrame(1000);
+  EXPECT_FLOAT_EQ(animator_view_->Height(), 150.f);
+  handler->DoAnimationFrame(1080);
+  EXPECT_FLOAT_EQ(animator_view_->Height(), 100.f);
+  EXPECT_FALSE(animator_view_->TransitionMgr()->IsAnimationRunning(
+      ClayAnimationPropertyType::kHeight));
+}
+
 namespace {
 
 static std::string FractionKeyFromPercent(int percent) {
@@ -1030,6 +1050,7 @@ TEST_F_UI(KeyFrameTest, RasterTransitionEventsRemainUIOwned) {
   ASSERT_EQ(replacement_animators.size(), 1u);
   EXPECT_TRUE(replacement_animators.front()->StartListenersCalled());
   replacement_animators.front()->DoAnimationFrame(160);
+  raster_manager->CancelAllAnimators();
   EXPECT_TRUE(raster_events.transition_events.empty());
 
   page_->GetAnimationHandler()->DoAnimationFrame(0);

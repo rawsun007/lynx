@@ -42,10 +42,10 @@ class KeyframesManager {
   AnimatorTarget* GetTarget() const { return target_; }
   void SetEventHandler(AnimationEventHandler* event_handler);
 
-  void OnAnimationStart(const Animator& animation);
-  void OnAnimationRepeat(const Animator& animation);
-  void OnAnimationEnd(const Animator& animator);
-  void OnAnimationCancel(const Animator& animator);
+  void OnAnimationStart(const Animator& animation, double elapsed_time);
+  void OnAnimationRepeat(const Animator& animation, double elapsed_time);
+  void OnAnimationEnd(const Animator& animation, double elapsed_time);
+  void OnAnimationCancel(const Animator& animation, double elapsed_time);
 
   // If there are some animations with percentage value, we need to recalculate
   // these values.
@@ -110,17 +110,21 @@ class KeyframesManager {
 class KeyframeListener : public AnimatorListenerAdapter {
  public:
   explicit KeyframeListener(KeyframesManager* mgr) : mgr_(mgr) {}
-  void OnAnimationStart(Animator& animation) override {
-    mgr_->OnAnimationStart(animation);
+  void OnAnimationStartWithElapsedTime(Animator& animation,
+                                       double elapsed_time) override {
+    mgr_->OnAnimationStart(animation, elapsed_time);
   }
-  void OnAnimationEnd(Animator& animation) override {
-    mgr_->OnAnimationEnd(animation);
+  void OnAnimationEndWithElapsedTime(Animator& animation,
+                                     double elapsed_time) override {
+    mgr_->OnAnimationEnd(animation, elapsed_time);
   }
-  void OnAnimationCancel(Animator& animation) override {
-    mgr_->OnAnimationCancel(animation);
+  void OnAnimationCancelWithElapsedTime(Animator& animation,
+                                        double elapsed_time) override {
+    mgr_->OnAnimationCancel(animation, elapsed_time);
   }
-  void OnAnimationRepeat(Animator& animation) override {
-    mgr_->OnAnimationRepeat(animation);
+  void OnAnimationRepeatWithElapsedTime(Animator& animation,
+                                        double elapsed_time) override {
+    mgr_->OnAnimationRepeat(animation, elapsed_time);
   }
 
  private:
