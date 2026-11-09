@@ -870,6 +870,9 @@ class Element : public lepus::RefCounted,
   // tree. The target retains the render source until the deferred platform
   // remove-and-insert operations have been generated.
   void MoveNodeToIndex(const fml::RefPtr<Element>& child, int32_t index);
+  // Opt this child into coalescing remove/insert sequences into render moves.
+  // Configure before tree mutations; other children retain the legacy path.
+  void SetEnableMoveAction(bool enabled) { enable_move_action_ = enabled; }
   virtual void ReplaceElements(
       const base::Vector<fml::RefPtr<Element>>& inserted,
       const base::Vector<fml::RefPtr<Element>>& removed,
@@ -2513,6 +2516,7 @@ class Element : public lepus::RefCounted,
   std::unique_ptr<SLNode> sl_node_{nullptr};
   std::unique_ptr<starlight::CustomLayoutFunctions> custom_layout_functions_;
   bool is_compose_layout_{false};
+  bool enable_move_action_{false};
 
  private:
   bool FlushCustomLayoutFunctions();

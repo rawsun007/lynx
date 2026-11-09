@@ -72,6 +72,7 @@ ComposeElementHandle::ComposeElementHandle(ElementManager* manager,
     : content_element_(CreateContentElement(manager, kind, tag, tasm)),
       mount_root_(content_element_) {
   content_element_->MarkAsComposeLayout();
+  content_element_->SetEnableMoveAction(true);
 }
 
 std::optional<LayoutResult> ComposeElementHandle::MeasureText(

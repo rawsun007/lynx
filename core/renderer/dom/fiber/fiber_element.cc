@@ -1619,7 +1619,15 @@ void Element::InsertNodeBeforeInternal(const fml::RefPtr<Element> &child,
 
   // the insert Action should be inserted to Child, should make sure the child
   // has been flushed
-  if (has_to_store_insert_remove_actions_) {
+  if (child->enable_move_action_ && child->render_parent()) {
+    auto *source = child->render_parent();
+    // The target owns the move. Retain a distinct render source until flush;
+    // same-parent reordering must not make the target retain itself.
+    action_param_list_.emplace_back(
+        Action::kMoveAct, this, child, index, ref_node, child->is_fixed(),
+        child->ZIndex() != 0,
+        source == this ? nullptr : fml::RefPtr<Element>(source));
+  } else if (has_to_store_insert_remove_actions_) {
     action_param_list_.emplace_back(Action::kInsertChildAct, this, child, index,
                                     ref_node, child->is_fixed());
   }
@@ -1664,7 +1672,9 @@ fml::RefPtr<Element> Element::TakeMoveSourceParent(
     return fml::RefPtr<Element>(this);
   }
 
-  auto source_parent = std::move(pending_move->source_parent_);
+  auto source_parent = pending_move->source_parent_
+                           ? std::move(pending_move->source_parent_)
+                           : fml::RefPtr<Element>(this);
   action_param_list_.erase(pending_move);
   return source_parent;
 }
@@ -1708,7 +1718,8 @@ void Element::RemoveNodeInternal(const fml::RefPtr<Element> &child,
 
   // the Remove Action should be inserted to Parent, due to child has been
   // removed from element tree here
-  if (has_to_store_insert_remove_actions_) {
+  if (has_to_store_insert_remove_actions_ ||
+      (child->enable_move_action_ && child->render_parent() == this)) {
     action_param_list_.emplace_back(Action::kRemoveChildAct, this, child, index,
                                     nullptr, child->is_fixed(),
                                     child->ZIndex() != 0);
@@ -3482,7 +3493,16 @@ void Element::PrepareAndGenerateChildrenActions() {
         case Action::kMoveAct: {
           auto *param_child = param.child_.get();
           auto *param_ref = param.ref_node_;
-          auto *source_parent = param.source_parent_.get();
+          // Several moves may be queued before flush. Only the final logical
+          // parent may attach the child; an earlier move may have changed its
+          // render source in the meantime.
+          if (param_child->enable_move_action_ &&
+              param_child->parent() != this) {
+            break;
+          }
+          auto *source_parent = param_child->enable_move_action_
+                                    ? param_child->render_parent()
+                                    : param.source_parent_.get();
           if (source_parent == nullptr ||
               param_child->render_parent() != source_parent) {
             LOGE("FiberElement move lost its render source");
@@ -3504,6 +3524,10 @@ void Element::PrepareAndGenerateChildrenActions() {
 
         case Action::kInsertChildAct: {
           auto *param_child = param.child_.get();
+          if (param_child->enable_move_action_ &&
+              param_child->parent() != this) {
+            break;
+          }
           auto *param_ref = param.ref_node_;
           PrepareChildForInsertion(param_child);
           if (!param.is_fixed_ || IsFixedNewOrUnifiedEnabled()) {
@@ -3520,6 +3544,15 @@ void Element::PrepareAndGenerateChildrenActions() {
 
         case Action::kRemoveChildAct: {
           auto *param_child = param.child_.get();
+          // Reinserted children are detached by their final target's MoveAct,
+          // independently of which parent flushes first.
+          // Children under discarded detached wrappers still need removal.
+          if (param_child->enable_move_action_ &&
+              ((param_child->parent() != nullptr &&
+                param_child->IsAttached()) ||
+               param_child->render_parent() != this)) {
+            break;
+          }
           if (!param.is_fixed_ || IsFixedNewOrUnifiedEnabled()) {
             HandleRemoveChildAction(param_child);
           } else {

@@ -284,7 +284,8 @@ Element::Element(const Element& element, bool clone_resolved_props)
       reset_attr_vec_(element.reset_attr_vec_),
       modifier_attribute_names_(element.modifier_attribute_names_),
       part_id_(element.part_id_),
-      is_compose_layout_(element.is_compose_layout_) {
+      is_compose_layout_(element.is_compose_layout_),
+      enable_move_action_(element.enable_move_action_) {
   if (element.custom_layout_functions_ &&
       !element.custom_layout_functions_->context) {
     custom_layout_functions_ =
