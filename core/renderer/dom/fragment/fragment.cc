@@ -97,6 +97,7 @@ bool Fragment::CreateLayerIfNeeded(const fml::RefPtr<PropBundle>& init_data) {
 
   behavior_->CreatePlatformRenderer(init_data, init_config);
   has_platform_renderer_ = true;
+  InvalidateClipPath();
   auto* root = element_manager()->root();
   if (root != nullptr && root->fragment_impl() != nullptr) {
     root->fragment_impl()->platform_layer_count_++;
@@ -112,10 +113,78 @@ void Fragment::UpdatePlatformExtraBundle(PlatformExtraBundle* bundle) {
   painting_context()->UpdatePlatformExtraBundle(id(), bundle);
 }
 
+void Fragment::CaptureClipPathStyleChange() {
+  auto* style = element()->computed_css_style();
+  if (style->HasChangedProperty(kPropertyIDClipPath) ||
+      style->HasResetProperty(kPropertyIDClipPath)) {
+    InvalidateClipPath();
+  }
+  InvalidateClipPathIfSourceScaleChanged();
+}
+
+void Fragment::InvalidateClipPathIfSourceScaleChanged() {
+  auto& cache = cached_clip_path_;
+  if (!cache.resolved.depends_on_source_scale) return;
+  const auto* style = element()->computed_css_style();
+  if (cache.source_to_layout_scale ==
+      style->GetMeasureContext().layouts_unit_per_px_)
+    return;
+  InvalidateClipPath();
+}
+
+void Fragment::InvalidateClipPath() {
+  cached_clip_path_.dirty = true;
+  if (has_platform_renderer_) {
+    InvalidateForSubtreeProperty();
+  } else {
+    InvalidateForRedraw();
+  }
+}
+
+void Fragment::UpdateCachedClipPath() {
+  InvalidateClipPathIfSourceScaleChanged();
+  auto& cache = cached_clip_path_;
+  if (!cache.dirty) return;
+  auto* style = element()->computed_css_style();
+  cache.source_to_layout_scale =
+      style->GetMeasureContext().layouts_unit_per_px_;
+  cache.resolved = ResolveClipPath(
+      style->GetClipPath(), layout_info_.GetBorderBoxWidth(),
+      layout_info_.GetBorderBoxHeight(), cache.source_to_layout_scale);
+  // The legacy FLR pipeline retains CSS dirty bits after style handoff.
+  // Consume this property after the cached Path captures its latest value.
+  style->ClearDirtyBits(kPropertyIDClipPath);
+  cache.dirty = false;
+}
+
+void Fragment::DrawCSSClipPath(DisplayListBuilder& builder) {
+  UpdateCachedClipPath();
+  const auto& clip = cached_clip_path_.resolved;
+  if (clip.path) {
+    builder.ClipPath(clip.path, clip.fill_rule, clip.x, clip.y);
+  }
+}
+
+void Fragment::DrawClipPathProperty(DisplayListBuilder& builder) {
+  auto& cache = cached_clip_path_;
+  const bool force_baseline =
+      HasCustomLayerProperties() || cache.restore_css_clip;
+  if (!has_platform_renderer_ || (!cache.dirty && !force_baseline)) return;
+  const bool had_path = static_cast<bool>(cache.resolved.path);
+  UpdateCachedClipPath();
+  const auto& clip = cache.resolved;
+  if (had_path || clip.path || force_baseline) {
+    builder.ClipPathProperty(clip.path, clip.fill_rule, clip.x, clip.y);
+  }
+  cache.restore_css_clip = false;
+}
+
 void Fragment::StyleChanged() {
   if (element() == nullptr) {
     return;
   }
+
+  CaptureClipPathStyleChange();
 
   // There are four cases for z-index:
   // z.0. z-index does not change.
@@ -352,6 +421,15 @@ void Fragment::InvalidateLayerPropertiesIfSizeChanged(
 
 void Fragment::UpdateLayout(
     LayoutResultForRendering layout_result_for_rendering) {
+  if ((cached_clip_path_.resolved.depends_on_width &&
+       layout_info_.GetBorderBoxWidth() !=
+           layout_result_for_rendering.size_.width_) ||
+      (cached_clip_path_.resolved.depends_on_height &&
+       layout_info_.GetBorderBoxHeight() !=
+           layout_result_for_rendering.size_.height_)) {
+    cached_clip_path_.dirty = true;
+  }
+  InvalidateClipPathIfSourceScaleChanged();
   InvalidateLayerPropertiesIfSizeChanged(layout_result_for_rendering);
   InvalidateForRedraw();
   layout_info_.layout_result = std::move(layout_result_for_rendering);
@@ -1348,6 +1426,7 @@ void Fragment::ResetLayerProperties() {
   style->MarkChanged(kPropertyIDTransform);
   style->MarkChanged(kPropertyIDOpacity);
   style->MarkChanged(kPropertyIDFilter);
+  cached_clip_path_.restore_css_clip = true;
   InvalidateForSubtreeProperty();
 }
 
@@ -1389,6 +1468,7 @@ void Fragment::DrawLayerProperties(DisplayListBuilder& builder) {
   DrawTransform(builder);
   DrawOpacity(builder);
   DrawFilter(builder);
+  DrawClipPathProperty(builder);
   if (HasCustomLayerProperties()) {
     custom_draw_functions_->draw_layer_properties(*this, builder);
   }
@@ -1407,16 +1487,18 @@ void Fragment::OnDraw(DisplayListBuilder& display_list_builder) {
 
   // Only a fragment backed by a platform layer can skip full draw when its
   // contents haven't changed and only update subtree properties (transform,
-  // opacity, filter) instead. Fragments without a platform renderer have no
-  // display list of their own and must always contribute to the parent layer's
-  // display list via DrawFull.
+  // opacity, filter, clip-path) instead. Fragments without a platform renderer
+  // have no display list of their own and must always contribute to the parent
+  // layer's display list via DrawFull.
+  InvalidateClipPathIfSourceScaleChanged();
   if (NeedRedraw() || !has_platform_renderer_) {
     DrawFull(display_list_builder);
   } else {
     DispatchUpdateDisplayList();
   }
 
-  if (NeedUpdateSubtreeProperty()) {
+  if (NeedUpdateSubtreeProperty() ||
+      (has_platform_renderer_ && cached_clip_path_.dirty)) {
     DrawLayerProperties(display_list_builder);
   }
 
@@ -1458,6 +1540,9 @@ void Fragment::DrawFull(DisplayListBuilder& display_list_builder) {
       layout_info_.layout_result.size_.height_, computed_style->IsOverflowX(),
       computed_style->IsOverflowY(), ShouldSyncLayoutOnlyToEventTarget());
 
+  if (!has_platform_renderer_) {
+    DrawCSSClipPath(display_list_builder);
+  }
   DrawBehind(display_list_builder);
   DrawBackground(display_list_builder);
   DrawBoxShadow(display_list_builder);
