@@ -20,7 +20,14 @@ class NapiConvertHelper {
  public:
   static lepus_value JSONToLepusValue(napi_env env, napi_value obj);
 
+  // Stops traversing the parent after truncating a property at the depth limit.
+  static lepus_value JSONToLepusValue(napi_env env, napi_value obj,
+                                      std::string* error_message);
+
   static lepus_value ConvertToLepusValue(napi_env env, napi_value obj);
+
+  static lepus_value ConvertToLepusValue(napi_env env, napi_value obj,
+                                         std::string* error_message);
 
   static void AssembleArray(napi_env env, napi_value array, uint32_t index,
                             const lepus::Value& value);
