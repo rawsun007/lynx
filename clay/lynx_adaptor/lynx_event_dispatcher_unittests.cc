@@ -2,6 +2,7 @@
 // Licensed under the Apache License Version 2.0 that can be found in the
 // LICENSE file in the root directory of this source tree.
 
+#include <initializer_list>
 #include <list>
 #include <memory>
 #include <string>
@@ -11,6 +12,7 @@
 #include "clay/lynx_adaptor/lynx_event_dispatcher.h"
 #include "clay/lynx_adaptor/value_converter.h"
 #include "clay/public/value.h"
+#include "third_party/googletest/googlemock/include/gmock/gmock.h"
 #include "third_party/googletest/googletest/include/gtest/gtest.h"
 
 namespace clay {
@@ -37,12 +39,15 @@ class RecordingEngineProxy : public lynx::shell::LynxEngineProxy {
   }
 
   void DispatchTaskToLynxEngine(lynx::base::closure) override {}
-  void SendCustomEvent(const std::string&, int32_t, const lynx::pub::Value&,
-                       const std::string&) override {}
+  MOCK_METHOD(void, SendCustomEvent,
+              (const std::string&, int32_t, const lynx::pub::Value&,
+               const std::string&),
+              (override));
   void SendGestureEvent(int, int, std::string,
                         const lynx::pub::Value&) override {}
-  void SendBubbleEvent(const std::string&, int32_t,
-                       const lynx::pub::Value&) override {}
+  MOCK_METHOD(void, SendBubbleEvent,
+              (const std::string&, int32_t, const lynx::pub::Value&),
+              (override));
   void OnPseudoStatusesChanged(
       std::vector<lynx::event::PseudoStatusChange>) override {}
   void StartEventGenerate(const lynx::pub::Value&) override {}
@@ -62,12 +67,13 @@ class RecordingEngineProxy : public lynx::shell::LynxEngineProxy {
   std::list<int32_t> GetAncestorElements(int32_t) override { return {}; }
   void MarkLayoutDirty(int) override {}
   bool EnableRasterAnimation() override { return false; }
-  float GetDensity() const override { return 1.f; }
+  float GetDensity() const override { return density; }
   void OnFirstMeaningfulPaint() override {}
   void TriggerLayout() override {}
 
   std::vector<TouchRecord> touches;
   std::vector<std::string> single_touch_names;
+  float density = 1.f;
 };
 
 class LynxEventDispatcherTest : public ::testing::Test {
@@ -238,6 +244,57 @@ TEST_F(LynxEventDispatcherTest, SingleTouchModeUsesTheOriginalInterface) {
   EXPECT_EQ(engine_->single_touch_names.at(0), "touchstart");
   EXPECT_EQ(engine_->single_touch_names.at(1), "touchmove");
   EXPECT_EQ(engine_->single_touch_names.at(2), "touchend");
+}
+
+TEST_F(LynxEventDispatcherTest,
+       WheelPreservesDeltasAndReportsLogicalCoordinates) {
+  engine_->density = 2.f;
+  EXPECT_CALL(*engine_, SendBubbleEvent("wheel", 42, ::testing::_))
+      .WillOnce(::testing::WithArg<2>([](const lynx::pub::Value& params) {
+        const std::initializer_list<std::pair<const char*, double>> expected = {
+            {"x", 5},        {"y", 10},       {"pageX", 15},  {"pageY", 20},
+            {"clientX", 15}, {"clientY", 20}, {"deltaX", -3}, {"deltaY", 7}};
+        for (const auto& [key, number] : expected) {
+          const auto value = params.GetValueForKey(key);
+          ASSERT_TRUE(value && value->IsNumber()) << key;
+          EXPECT_DOUBLE_EQ(value->Number(), number) << key;
+        }
+      }));
+
+  dispatcher_.OnWheelEvent("wheel", 42, 10.f, 20.f, 30.f, 40.f, -3.f, 7.f);
+}
+
+TEST_F(LynxEventDispatcherTest, LayoutChangeForwardsGeometryInDetail) {
+  EXPECT_CALL(*engine_,
+              SendCustomEvent("layoutchange", 42, ::testing::_, "detail"))
+      .WillOnce(::testing::WithArg<2>([](const lynx::pub::Value& params) {
+        const auto id = params.GetValueForKey("id");
+        ASSERT_TRUE(id && id->IsString());
+        EXPECT_EQ(id->str(), "layout-target");
+        const auto width = params.GetValueForKey("width");
+        ASSERT_TRUE(width && width->IsNumber());
+        EXPECT_DOUBLE_EQ(width->Number(), 40);
+      }));
+
+  Value::Map detail;
+  detail.emplace("id", Value("layout-target"));
+  detail.emplace("width", Value(40.f));
+  dispatcher_.OnLayoutChanged(42, std::move(detail));
+}
+
+TEST_F(LynxEventDispatcherTest, AnimationCancelForwardsKeyframeIdentity) {
+  EXPECT_CALL(*engine_,
+              SendCustomEvent("animationcancel", 42, ::testing::_, "params"))
+      .WillOnce(::testing::WithArg<2>([](const lynx::pub::Value& params) {
+        const auto type = params.GetValueForKey("animation_type");
+        ASSERT_TRUE(type && type->IsString());
+        EXPECT_EQ(type->str(), "keyframe-animation");
+        const auto name = params.GetValueForKey("animation_name");
+        ASSERT_TRUE(name && name->IsString());
+        EXPECT_EQ(name->str(), "fade-out");
+      }));
+
+  dispatcher_.OnAnimationEvent("animationcancel", "fade-out", 42);
 }
 
 }  // namespace
