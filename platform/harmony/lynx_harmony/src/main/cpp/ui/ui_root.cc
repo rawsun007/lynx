@@ -36,7 +36,12 @@ UIRoot::UIRoot(LynxContext* context, int sign, const std::string& tag)
       .size = sizeof(change_ratio) / sizeof(ArkUI_NumberValue)};
   NodeManager::Instance().SetAttribute(root_proxy_,
                                        NODE_VISIBLE_AREA_CHANGE_RATIO, &item);
-
+  // Exclude infrastructure nodes while keeping their descendants accessible.
+  for (auto node : {root_proxy_, normal_sibling_, transparent_sibling_}) {
+    NodeManager::Instance().SetAttributeWithNumberValue(
+        node, NODE_ACCESSIBILITY_MODE,
+        static_cast<int32_t>(ARKUI_ACCESSIBILITY_MODE_DISABLED));
+  }
   NodeManager::Instance().AddNodeEventReceiver(transparent_sibling_,
                                                UIBase::EventReceiver);
   NodeManager::Instance().AddNodeEventReceiver(root_proxy_,
