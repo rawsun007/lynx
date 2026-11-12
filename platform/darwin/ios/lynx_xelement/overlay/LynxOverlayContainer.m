@@ -6,6 +6,7 @@
 #import <Lynx/LynxEventHandler+Internal.h>
 #import <Lynx/LynxTemplateRender+Internal.h>
 #import <Lynx/LynxTouchHandler+Internal.h>
+#import <Lynx/LynxUIRenderer.h>
 #import <Lynx/LynxView+Internal.h>
 #import <XElement/LynxOverlayContainer.h>
 
@@ -84,6 +85,39 @@
 
 @implementation LynxOverlayContainer
 
+- (LynxUIRenderer *)inputRenderer {
+  UIView *rootView = [self.uiDelegate overlayRootUI].context.rootView;
+  if (![rootView isKindOfClass:LynxView.class]) {
+    return nil;
+  }
+  id renderer = ((LynxView *)rootView).templateRender.lynxUIRenderer;
+  return [renderer isKindOfClass:LynxUIRenderer.class] ? renderer : nil;
+}
+
+- (BOOL)canBecomeFirstResponder {
+  return [[self inputRenderer] isRawInputEnabled] || [super canBecomeFirstResponder];
+}
+
+- (BOOL)becomeFirstResponder {
+  BOOL success = [super becomeFirstResponder];
+  if (success) {
+    [[self inputRenderer] notifyInputRootStateChanged:[self.uiDelegate getSign]
+                                             attached:self.window != nil
+                                              focused:YES];
+  }
+  return success;
+}
+
+- (BOOL)resignFirstResponder {
+  BOOL success = [super resignFirstResponder];
+  if (success) {
+    [[self inputRenderer] notifyInputRootStateChanged:[self.uiDelegate getSign]
+                                             attached:self.window != nil
+                                              focused:NO];
+  }
+  return success;
+}
+
 - (void)enableTouchOverlayEvent:(BOOL)enable {
   if (enable) {
     if (!self.simulGesture) {
@@ -108,6 +142,14 @@
   } else {
     [self.simulGesture.view removeGestureRecognizer:self.simulGesture];
   }
+}
+
+- (void)didMoveToWindow {
+  [super didMoveToWindow];
+  [[self inputRenderer]
+      notifyInputRootStateChanged:[self.uiDelegate getSign]
+                         attached:self.window != nil
+                          focused:self.window.isKeyWindow && self.isFirstResponder];
 }
 
 - (void)setHidden:(BOOL)hidden {
@@ -158,6 +200,7 @@
   self.eventHandler = [[LynxEventHandler alloc] initWithRootView:self
                                                       withRootUI:rootUI
                                                          andFlag:flag];
+  [self.eventHandler setRawInputEnabled:[[self inputRenderer] isRawInputEnabled]];
   [self.eventHandler updateUiOwner:rootUI.context.uiOwner eventEmitter:rootUI.context.eventEmitter];
   _eventHandlerIndex = [self.eventHandler
       setGestureArenaManagerAndGetIndex:rootUI.context.eventHandler.gestureArenaManager];
@@ -204,6 +247,9 @@
                                                     : nil];
     }
     touchHandler.platformEventBehavior = eventBehavior;
+    if ((eventBehavior & LynxPlatformEventBehaviorRawInputExclusive) != 0) {
+      return self;
+    }
     [self.eventHandler
         handleFocusOnView:view
             withContainer:self

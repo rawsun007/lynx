@@ -31,6 +31,7 @@
 #import <Lynx/LynxTransferListener.h>
 #import <Lynx/LynxUIKitAPIAdapter.h>
 #import <Lynx/LynxUIOwner.h>
+#import <Lynx/LynxUIRenderer.h>
 #import <Lynx/LynxUIRendererProtocol.h>
 #import <Lynx/LynxView.h>
 #import <Lynx/LynxWeakProxy.h>
@@ -433,6 +434,36 @@
   RUN_RENDER_SAFELY([_templateRender didMoveToWindow:self.window == nil];);
 }
 
+- (BOOL)canBecomeFirstResponder {
+  LynxUIRenderer* renderer = (LynxUIRenderer*)_templateRender.lynxUIRenderer;
+  if ([renderer isKindOfClass:LynxUIRenderer.class] && [renderer isRawInputEnabled]) {
+    return YES;
+  }
+  return [super canBecomeFirstResponder];
+}
+
+- (BOOL)becomeFirstResponder {
+  BOOL success = [super becomeFirstResponder];
+  LynxUIRenderer* renderer = (LynxUIRenderer*)_templateRender.lynxUIRenderer;
+  if (success && [renderer isKindOfClass:LynxUIRenderer.class]) {
+    [renderer notifyInputRootStateChanged:renderer.uiOwner.uiContext.eventHandler.eventRootSign
+                                 attached:self.window != nil
+                                  focused:YES];
+  }
+  return success;
+}
+
+- (BOOL)resignFirstResponder {
+  BOOL success = [super resignFirstResponder];
+  LynxUIRenderer* renderer = (LynxUIRenderer*)_templateRender.lynxUIRenderer;
+  if (success && [renderer isKindOfClass:LynxUIRenderer.class]) {
+    [renderer notifyInputRootStateChanged:renderer.uiOwner.uiContext.eventHandler.eventRootSign
+                                 attached:self.window != nil
+                                  focused:NO];
+  }
+  return success;
+}
+
 - (void)willMoveToWindow:(UIWindow*)newWindow {
   [super willMoveToWindow:newWindow];
 
@@ -505,6 +536,9 @@
     if (isFragmentLayerRender) {
       LynxTouchHandler* touchHandler = eventHandler.touchRecognizer;
       touchHandler.platformEventBehavior = eventBehavior;
+      if ((eventBehavior & LynxPlatformEventBehaviorRawInputExclusive) != 0) {
+        return view != nil ? self : nil;
+      }
       [eventHandler handleFocusOnView:view
                         withContainer:self
                              andPoint:point

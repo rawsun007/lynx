@@ -10,6 +10,7 @@
 #import <Lynx/LynxLog.h>
 #import <Lynx/LynxRootUI.h>
 #import <Lynx/LynxTemplateRender+Internal.h>
+#import <Lynx/LynxTouchHandler+Internal.h>
 #import <Lynx/LynxTouchHandler.h>
 #import <Lynx/LynxUI+Internal.h>
 #import <Lynx/LynxUIKitAPIAdapter.h>
@@ -20,7 +21,6 @@
 #import <Lynx/LynxWeakProxy.h>
 #import <Lynx/UIView+Lynx.h>
 #import "LynxGestureArenaManager.h"
-#import "LynxTouchHandler+Internal.h"
 
 #include <stdint.h>
 
@@ -378,6 +378,7 @@ static const NSInteger kLynxFragmentLayerDefaultRootSign = 10;
   NSMutableSet* _setOfPropsChanged;
   BOOL _isFragmentLayerRendererOn;
   BOOL _enablePlatformGesture;
+  BOOL _rawInputEnabled;
 }
 
 - (void)dealloc {
@@ -406,6 +407,7 @@ static const NSInteger kLynxFragmentLayerDefaultRootSign = 10;
     return;
   }
 
+  [self setRawInputEnabled:eventHandler->_rawInputEnabled];
   [self setEnableViewReceiveTouch:eventHandler.tapRecognizer != nil &&
                                   !eventHandler.tapRecognizer.cancelsTouchesInView];
   [self setEnableSimultaneousTap:eventHandler.enableSimultaneousTap];
@@ -549,15 +551,37 @@ static const NSInteger kLynxFragmentLayerDefaultRootSign = 10;
 - (void)attachContainerView:(UIView*)rootView {
   _rootView = rootView;
   [_rootView addGestureRecognizer:_touchRecognizer];
-  [_rootView addGestureRecognizer:_longPressRecognizer];
-  [_rootView addGestureRecognizer:_tapRecognizer];
+  if (!_rawInputEnabled) {
+    [_rootView addGestureRecognizer:_longPressRecognizer];
+    [_rootView addGestureRecognizer:_tapRecognizer];
+  }
   if (!_isFragmentLayerRendererOn) {
     if (_customPlatformGesture != nil) {
       [_rootView addGestureRecognizer:_customPlatformGesture];
     }
   }
-  if (_panGestureRecognizer != nil) {
+  if (!_rawInputEnabled && _panGestureRecognizer != nil) {
     [_rootView addGestureRecognizer:_panGestureRecognizer];
+  }
+}
+
+- (void)setRawInputEnabled:(BOOL)enabled {
+  if (_rawInputEnabled == enabled) {
+    return;
+  }
+  _rawInputEnabled = enabled;
+  if (enabled) {
+    [_rootView removeGestureRecognizer:_longPressRecognizer];
+    [_rootView removeGestureRecognizer:_tapRecognizer];
+    if (_panGestureRecognizer != nil) {
+      [_rootView removeGestureRecognizer:_panGestureRecognizer];
+    }
+  } else {
+    [_rootView addGestureRecognizer:_longPressRecognizer];
+    [_rootView addGestureRecognizer:_tapRecognizer];
+    if (_panGestureRecognizer != nil) {
+      [_rootView addGestureRecognizer:_panGestureRecognizer];
+    }
   }
 }
 
